@@ -1,0 +1,14 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.local
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
