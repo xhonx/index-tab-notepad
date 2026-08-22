@@ -1,6 +1,9 @@
 import { screen, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
+import { settingsRepo } from './db'
+
+const TAB_CENTER_Y_KEY = 'tab_center_y'
 
 const TAB_WIDTH = 32
 const PANEL_WIDTH = 360
@@ -10,6 +13,7 @@ const QUARTER_RATIO = 0.25 // 접힘 상한 & 펼침 고정 높이, 둘 다 화�
 export const MAX_CATEGORIES = 5
 let currentTabCount = 1 // M3에서 카테고리 CRUD와 연동 예정 (지금은 임시 고정)
 let isExpanded = false
+let isPinned = false
 
 function getCollapsedHeight(tabCount: number): number {
   const { workAreaSize } = screen.getPrimaryDisplay()
@@ -22,7 +26,11 @@ function getExpandedHeight(): number {
   return workAreaSize.height * QUARTER_RATIO // 카테고리 개수와 무관하게 항상 1/4 고정
 }
 
-function getBounds(expanded: boolean, tabCount: number, keepCenterY?: number) {
+function getBounds(
+  expanded: boolean,
+  tabCount: number,
+  keepCenterY?: number
+): { x: number; y: number; width: number; height: number } {
   const { workAreaSize } = screen.getPrimaryDisplay()
   const width = expanded ? TAB_WIDTH + PANEL_WIDTH : TAB_WIDTH
   const height = expanded ? getExpandedHeight() : getCollapsedHeight(tabCount)
@@ -36,8 +44,14 @@ function getBounds(expanded: boolean, tabCount: number, keepCenterY?: number) {
 
 let dragInterval: NodeJS.Timeout | null = null
 
-export function createTabWindow() {
-  const bounds = getBounds(false, currentTabCount)
+export function createTabWindow(): BrowserWindow {
+  // 이전 세션에서 드래그로 옮겨둔 세로 위치가 있으면 복원, 없으면 기본값(화면 중앙)
+  const savedCenterY = settingsRepo.get(TAB_CENTER_Y_KEY)
+  const bounds = getBounds(
+    false,
+    currentTabCount,
+    savedCenterY !== null ? Number(savedCenterY) : undefined
+  )
   const win = new BrowserWindow({
     ...bounds,
     frame: false,
@@ -117,12 +131,25 @@ export function createTabWindow() {
       clearInterval(dragInterval)
       dragInterval = null
     }
+    // 드래그가 끝난 세로 위치를 저장해서 다음 실행 때도 같은 자리에 뜨게 함
+    const [, curY] = win.getPosition()
+    const [, curHeight] = win.getSize()
+    settingsRepo.set(TAB_CENTER_Y_KEY, String(curY + curHeight / 2))
+  })
+
+  // Pin 모드: 켜져있으면 창 포커스가 빠져도(클릭 아웃) 자동으로 접히지 않음
+  ipcMain.on('set-pinned', (_e, pinned: boolean) => {
+    isPinned = pinned
   })
 
   win.on('blur', () => {
     if (dragInterval) {
       clearInterval(dragInterval)
       dragInterval = null
+    }
+    // 클릭 아웃 시 자동 접힘 (Pin 상태면 무시) — 렌더러에 접힘 애니메이션 시작을 요청
+    if (isExpanded && !isPinned) {
+      win.webContents.send('force-collapse')
     }
   })
 
