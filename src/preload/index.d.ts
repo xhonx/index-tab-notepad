@@ -22,6 +22,8 @@ export interface DbAPI {
   setSetting: (key: string, value: string) => Promise<void>
   getCategoryNote: (categoryId: string) => Promise<string>
   saveCategoryNote: (categoryId: string, content: string) => Promise<void>
+  getDailyNote: (date: string) => Promise<string>
+  saveDailyNote: (date: string, content: string) => Promise<void>
 }
 
 declare global {

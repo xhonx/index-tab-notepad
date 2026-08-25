@@ -11,6 +11,8 @@ const TAB_HEIGHT_DEFAULT = 68 // 탭 1개당 기본 높이 (접힘 상태 계산
 const QUARTER_RATIO = 0.25 // 접힘 상한 & 펼침 고정 높이, 둘 다 화면의 1/4
 
 export const MAX_CATEGORIES = 5
+// 창 높이 계산용 탭 개수 상한. 사용자 카테고리(MAX_CATEGORIES) + Today Todo 고정 탭 1개
+const MAX_TABS = MAX_CATEGORIES + 1
 let currentTabCount = 1 // M3에서 카테고리 CRUD와 연동 예정 (지금은 임시 고정)
 let isExpanded = false
 let isPinned = false
@@ -100,9 +102,9 @@ export function createTabWindow(): BrowserWindow {
     win.setBounds(getBounds(false, currentTabCount, centerY))
   })
 
-  // 카테고리 개수 변경 시 (M3에서 연결 예정). 펼쳐진 상태면 크기 불변, 접힌 상태면 즉시 반영
+  // 탭 개수(카테고리 + Today Todo 고정 탭) 변경 시. 펼쳐진 상태면 크기 불변, 접힌 상태면 즉시 반영
   ipcMain.on('update-tab-count', (_e, count: number) => {
-    currentTabCount = Math.min(count, MAX_CATEGORIES)
+    currentTabCount = Math.min(count, MAX_TABS)
     if (isExpanded) return
     const [, curY] = win.getPosition()
     const [, curHeight] = win.getSize()

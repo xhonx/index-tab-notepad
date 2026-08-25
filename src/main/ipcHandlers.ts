@@ -1,5 +1,11 @@
 import { ipcMain } from 'electron'
-import { categoriesRepo, categoryNotesRepo, settingsRepo, type Category } from './db'
+import {
+  categoriesRepo,
+  categoryNotesRepo,
+  dailyNotesRepo,
+  settingsRepo,
+  type Category
+} from './db'
 import { MAX_CATEGORIES } from './windowManager'
 
 // 카테고리 CRUD + 설정 저장/조회 IPC. 창 위치/드래그 관련 IPC는 windowManager.ts에서 관리.
@@ -35,5 +41,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('notes:get', (_e, categoryId: string) => categoryNotesRepo.get(categoryId))
   ipcMain.handle('notes:save', (_e, categoryId: string, content: string) =>
     categoryNotesRepo.save(categoryId, content)
+  )
+
+  // Today Todo (PRD 4.1) — 날짜(YYYY-MM-DD)를 키로 쌓이는 별도 문서
+  ipcMain.handle('daily-notes:get', (_e, date: string) => dailyNotesRepo.get(date))
+  ipcMain.handle('daily-notes:save', (_e, date: string, content: string) =>
+    dailyNotesRepo.save(date, content)
   )
 }

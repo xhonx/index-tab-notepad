@@ -36,7 +36,10 @@ const dbAPI = {
   getCategoryNote: (categoryId: string): Promise<string> =>
     ipcRenderer.invoke('notes:get', categoryId),
   saveCategoryNote: (categoryId: string, content: string): Promise<void> =>
-    ipcRenderer.invoke('notes:save', categoryId, content)
+    ipcRenderer.invoke('notes:save', categoryId, content),
+  getDailyNote: (date: string): Promise<string> => ipcRenderer.invoke('daily-notes:get', date),
+  saveDailyNote: (date: string, content: string): Promise<void> =>
+    ipcRenderer.invoke('daily-notes:save', date, content)
 }
 
 // Custom APIs for renderer

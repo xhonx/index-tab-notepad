@@ -50,12 +50,20 @@ const SectionDivider = Node.create({
 })
 
 interface NoteEditorProps {
-  categoryId: string
+  // 카테고리 메모(category_notes)든 Today Todo(daily_notes)든 이 컴포넌트는 신경 안 쓰고,
+  // 호출부(IndexTab.tsx)가 어디서 읽고/어디에 쓸지만 넘겨준다.
+  storageKey: string
+  loadContent: () => Promise<string>
+  saveContent: (content: string) => Promise<void>
 }
 
-function NoteEditor({ categoryId }: NoteEditorProps): React.JSX.Element {
+function NoteEditor({ storageKey, loadContent, saveContent }: NoteEditorProps): React.JSX.Element {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const activeCategoryIdRef = useRef(categoryId)
+  const saveContentRef = useRef(saveContent)
+  // 렌더 중에 ref를 직접 mutate하지 않고, 커밋 이후(effect)에 최신 콜백으로 동기화
+  useEffect(() => {
+    saveContentRef.current = saveContent
+  })
 
   const editor = useEditor({
     extensions: [
@@ -67,28 +75,27 @@ function NoteEditor({ categoryId }: NoteEditorProps): React.JSX.Element {
     ],
     content: '',
     onUpdate: ({ editor: updatedEditor }) => {
-      const categoryIdAtEdit = activeCategoryIdRef.current
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
-        window.dbAPI.saveCategoryNote(categoryIdAtEdit, updatedEditor.getHTML())
+        saveContentRef.current(updatedEditor.getHTML())
       }, AUTOSAVE_DEBOUNCE_MS)
     }
   })
 
-  // 카테고리를 전환할 때마다 해당 카테고리의 저장된 메모를 불러와 채움
+  // storageKey(카테고리 id 또는 날짜)가 바뀔 때마다 해당 문서를 불러와 채움
   useEffect(() => {
-    activeCategoryIdRef.current = categoryId
-    if (!editor || !categoryId) return
+    if (!editor) return
 
     let cancelled = false
-    window.dbAPI.getCategoryNote(categoryId).then((content) => {
+    loadContent().then((content) => {
       if (cancelled) return
       editor.commands.setContent(content, { emitUpdate: false })
     })
     return () => {
       cancelled = true
     }
-  }, [editor, categoryId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- storageKey가 사실상의 identity, load/saveContent는 호출부에서 매 렌더 새로 만들어지는 클로저라 deps에 넣으면 무한 재로드됨
+  }, [editor, storageKey])
 
   // 언마운트 시 대기 중인 디바운스 저장을 즉시 반영 (탭 삭제/앱 종료 직전 유실 방지)
   useEffect(() => {

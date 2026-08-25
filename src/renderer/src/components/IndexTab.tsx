@@ -15,6 +15,9 @@ const PANEL_CONTENT_PADDING = `${PANEL_PADDING_PX}px ${PANEL_PADDING_PX + TAB_WI
 // windowManager.ts의 MAX_CATEGORIES와 동일하게 유지할 것 (창 크기 상한 계산 기준)
 const MAX_CATEGORIES = 5
 
+// Today Todo는 categories 테이블이 아니라 날짜 기반 daily_notes에 저장되는 고정 특수 탭 (PRD 4.1)
+const TODAY_TAB_ID = '__today__'
+
 // IPC invoke 에러는 "Error invoking remote method '...': Error: <메시지>" 형태로 오므로 메시지만 추출
 function extractErrorMessage(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err)
@@ -23,12 +26,23 @@ function extractErrorMessage(err: unknown): string {
   return idx >= 0 ? message.slice(idx + marker.length) : message
 }
 
+// 오늘 날짜를 YYYY-MM-DD로 계산. 자정이 지나면 Today Todo가 새 문서로 넘어가야 하므로
+// 저장하지 않고 호출할 때마다 다시 구함 (아래 자정 감지 useEffect 참고)
+function getTodayKey(): string {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 function IndexTab(): React.JSX.Element {
   const isDraggingRef = useRef(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
-  const [activeCategoryId, setActiveCategoryId] = useState('')
+  const [activeCategoryId, setActiveCategoryId] = useState(TODAY_TAB_ID)
+  const [todayKey, setTodayKey] = useState(getTodayKey)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [createError, setCreateError] = useState<string | undefined>(undefined)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -37,20 +51,24 @@ function IndexTab(): React.JSX.Element {
 
   // SQLite에 저장된 카테고리 목록을 최초 1회 로드
   useEffect(() => {
-    window.dbAPI.listCategories().then((cats) => {
-      setCategories(cats)
-      setActiveCategoryId((prev) => prev || cats[0]?.id || '')
-    })
+    window.dbAPI.listCategories().then(setCategories)
   }, [])
 
-  // 카테고리 개수가 바뀔 때마다 메인 프로세스에 알림 (접힘 상태 창 크기 계산용)
+  // 탭 개수(Today Todo 고정 탭 1개 + 카테고리)가 바뀔 때마다 메인 프로세스에 알림 (접힘 상태 창 크기 계산용)
   useEffect(() => {
-    window.tabAPI.updateTabCount(categories.length)
+    window.tabAPI.updateTabCount(categories.length + 1)
   }, [categories.length])
 
   // 클릭 아웃(창 포커스 아웃) 시 메인 프로세스가 접힘을 요청하면 반영 (Pin 상태면 메인에서 아예 안 보냄)
   useEffect(() => {
     return window.tabAPI.onForceCollapse(() => setIsExpanded(false))
+  }, [])
+
+  // 자정 전환 감지 (PRD 10장): 30초마다 오늘 날짜를 다시 계산해서 바뀌었으면 Today Todo를 새 문서로 갱신.
+  // todayKey가 바뀌면 아래 NoteEditor가 key로 리마운트되어 자동으로 새 날짜 문서를 로드함
+  useEffect(() => {
+    const interval = setInterval(() => setTodayKey(getTodayKey()), 30_000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleMouseDown = (e: React.MouseEvent): void => {
@@ -67,17 +85,17 @@ function IndexTab(): React.JSX.Element {
     window.addEventListener('mouseup', handleMouseUp)
   }
 
-  const handleTabClick = (categoryId: string): void => {
+  const handleTabClick = (tabId: string): void => {
     if (isDraggingRef.current) return
 
     if (!isExpanded) {
-      setActiveCategoryId(categoryId)
+      setActiveCategoryId(tabId)
       setIsExpanded(true)
       window.tabAPI.expandWindow()
-    } else if (categoryId === activeCategoryId) {
+    } else if (tabId === activeCategoryId) {
       setIsExpanded(false) // 같은 탭 다시 클릭 → 접힘 (collapseWindow는 애니메이션 종료 후 호출됨)
     } else {
-      setActiveCategoryId(categoryId) // 다른 탭 클릭 → 창 크기 그대로, 내용만 전환
+      setActiveCategoryId(tabId) // 다른 탭 클릭 → 창 크기 그대로, 내용만 전환
     }
   }
 
@@ -117,15 +135,13 @@ function IndexTab(): React.JSX.Element {
   const handleDeleteCategory = async (id: string): Promise<void> => {
     await window.dbAPI.deleteCategory(id)
     setConfirmDeleteId(null)
-    setCategories((prev) => {
-      const next = prev.filter((c) => c.id !== id)
-      if (activeCategoryId === id) {
-        setActiveCategoryId(next[0]?.id ?? '')
-      }
-      return next
-    })
+    setCategories((prev) => prev.filter((c) => c.id !== id))
+    if (activeCategoryId === id) {
+      setActiveCategoryId(TODAY_TAB_ID) // 삭제된 탭이 열려있던 중이면 고정 탭인 Today Todo로 이동
+    }
   }
 
+  const isTodayActive = activeCategoryId === TODAY_TAB_ID
   const activeCategory = categories.find((c) => c.id === activeCategoryId)
 
   return (
@@ -139,7 +155,7 @@ function IndexTab(): React.JSX.Element {
     >
       {/* 메모 패널 */}
       <AnimatePresence onExitComplete={() => window.tabAPI.collapseWindow()}>
-        {isExpanded && activeCategory && (
+        {isExpanded && (isTodayActive || activeCategory) && (
           <motion.div
             initial={{ x: PANEL_WIDTH_PX, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -163,14 +179,16 @@ function IndexTab(): React.JSX.Element {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              {renamingId === activeCategory.id ? (
+              {isTodayActive ? (
+                <h3 style={{ margin: 0, color: '#333' }}>✅ Today Todo</h3>
+              ) : renamingId === activeCategory!.id ? (
                 <input
                   autoFocus
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={() => commitRename(activeCategory.id)}
+                  onBlur={() => commitRename(activeCategory!.id)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitRename(activeCategory.id)
+                    if (e.key === 'Enter') commitRename(activeCategory!.id)
                     if (e.key === 'Escape') setRenamingId(null)
                   }}
                   style={{
@@ -179,17 +197,17 @@ function IndexTab(): React.JSX.Element {
                     border: '1px solid #ddd',
                     borderRadius: 4,
                     padding: '2px 4px',
-                    color: activeCategory.color,
+                    color: activeCategory!.color,
                     outline: 'none'
                   }}
                 />
               ) : (
                 <h3
-                  onDoubleClick={() => startRename(activeCategory)}
+                  onDoubleClick={() => startRename(activeCategory!)}
                   title="더블클릭하면 이름을 바꿀 수 있어요"
-                  style={{ margin: 0, color: activeCategory.color, cursor: 'text' }}
+                  style={{ margin: 0, color: activeCategory!.color, cursor: 'text' }}
                 >
-                  {activeCategory.name}
+                  {activeCategory!.name}
                 </h3>
               )}
 
@@ -210,59 +228,77 @@ function IndexTab(): React.JSX.Element {
                   📌
                 </button>
 
-                {confirmDeleteId === activeCategory.id ? (
-                  <>
+                {/* Today Todo는 카테고리가 아니라서 이름 변경/삭제 대상이 아님 */}
+                {!isTodayActive &&
+                  (confirmDeleteId === activeCategory!.id ? (
+                    <>
+                      <button
+                        onClick={() => handleDeleteCategory(activeCategory!.id)}
+                        title="정말 삭제"
+                        style={{
+                          fontSize: 11,
+                          padding: '3px 6px',
+                          borderRadius: 6,
+                          border: '1px solid #e11d48',
+                          background: '#e11d48',
+                          color: 'white',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        삭제확인
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        style={{
+                          fontSize: 11,
+                          padding: '3px 6px',
+                          borderRadius: 6,
+                          border: '1px solid #ddd',
+                          background: 'white',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        취소
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      onClick={() => handleDeleteCategory(activeCategory.id)}
-                      title="정말 삭제"
+                      onClick={() => setConfirmDeleteId(activeCategory!.id)}
+                      title="카테고리 삭제"
                       style={{
-                        fontSize: 11,
-                        padding: '3px 6px',
-                        borderRadius: 6,
-                        border: '1px solid #e11d48',
-                        background: '#e11d48',
-                        color: 'white',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      삭제확인
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         padding: '3px 6px',
                         borderRadius: 6,
                         border: '1px solid #ddd',
                         background: 'white',
+                        color: '#999',
                         cursor: 'pointer'
                       }}
                     >
-                      취소
+                      🗑
                     </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(activeCategory.id)}
-                    title="카테고리 삭제"
-                    style={{
-                      fontSize: 12,
-                      padding: '3px 6px',
-                      borderRadius: 6,
-                      border: '1px solid #ddd',
-                      background: 'white',
-                      color: '#999',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🗑
-                  </button>
-                )}
+                  ))}
               </div>
             </div>
 
-            {/* key로 강제 리마운트: 카테고리 전환 시 에디터 내부 상태(히스토리 등)를 깔끔하게 초기화 */}
-            <NoteEditor key={activeCategory.id} categoryId={activeCategory.id} />
+            {/* key로 강제 리마운트: 탭/날짜 전환 시 에디터 내부 상태(히스토리 등)를 깔끔하게 초기화 */}
+            {isTodayActive ? (
+              <NoteEditor
+                key={todayKey}
+                storageKey={todayKey}
+                loadContent={() => window.dbAPI.getDailyNote(todayKey)}
+                saveContent={(content) => window.dbAPI.saveDailyNote(todayKey, content)}
+              />
+            ) : (
+              <NoteEditor
+                key={activeCategory!.id}
+                storageKey={activeCategory!.id}
+                loadContent={() => window.dbAPI.getCategoryNote(activeCategory!.id)}
+                saveContent={(content) =>
+                  window.dbAPI.saveCategoryNote(activeCategory!.id, content)
+                }
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -280,11 +316,35 @@ function IndexTab(): React.JSX.Element {
           zIndex: 2
         }}
       >
+        {/* Today Todo 고정 탭 — 항상 맨 위, 카테고리와 다른 색으로 구분 (PRD 9장 목업 참고) */}
+        <div
+          onMouseDown={handleMouseDown}
+          onClick={() => handleTabClick(TODAY_TAB_ID)}
+          title="Today Todo"
+          style={{
+            flex: 1,
+            background: '#333',
+            opacity: isExpanded && !isTodayActive ? 0.6 : 1,
+            borderRadius: '8px 0 0 8px',
+            borderBottom: '1px solid rgba(255,255,255,0.25)',
+            cursor: 'grab',
+            userSelect: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 14
+          }}
+        >
+          ✅
+        </div>
+
+        {/* 카테고리 탭 — 헷갈리지 않도록 이름을 세로쓰기로 표시 */}
         {categories.map((cat) => (
           <div
             key={cat.id}
             onMouseDown={handleMouseDown}
             onClick={() => handleTabClick(cat.id)}
+            title={cat.name}
             style={{
               flex: 1,
               background: cat.color,
@@ -292,9 +352,27 @@ function IndexTab(): React.JSX.Element {
               borderRadius: '8px 0 0 8px',
               borderBottom: '1px solid rgba(255,255,255,0.4)',
               cursor: 'grab',
-              userSelect: 'none'
+              userSelect: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden'
             }}
-          />
+          >
+            <span
+              style={{
+                writingMode: 'vertical-rl',
+                textOrientation: 'mixed',
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#333',
+                letterSpacing: '0.02em',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {cat.name}
+            </span>
+          </div>
         ))}
 
         {/* "+ 카테고리 추가" — 메모장이 펼쳐졌을 때만 작게 노출 (PRD 3.2) */}

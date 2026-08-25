@@ -33,6 +33,14 @@ export function initDatabase(): void {
       updated_at INTEGER NOT NULL
     );
 
+    -- Today Todo (PRD 4.1) — 카테고리와 별개로 날짜(YYYY-MM-DD)를 키로 쌓이는 구조.
+    -- 자정이 지나면 새 날짜로 넘어가고 이전 날짜 문서는 그대로 남아 캘린더 뷰(M6)에서 조회할 예정
+    CREATE TABLE IF NOT EXISTS daily_notes (
+      date TEXT PRIMARY KEY,
+      content TEXT NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -109,6 +117,21 @@ export const categoryNotesRepo = {
        VALUES (?, ?, ?)
        ON CONFLICT(category_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`
     ).run(categoryId, content, Date.now())
+  }
+}
+
+export const dailyNotesRepo = {
+  get(date: string): string {
+    const row = db.prepare('SELECT content FROM daily_notes WHERE date = ?').get(date) as
+      { content: string } | undefined
+    return row?.content ?? ''
+  },
+  save(date: string, content: string): void {
+    db.prepare(
+      `INSERT INTO daily_notes (date, content, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(date) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`
+    ).run(date, content, Date.now())
   }
 }
 
