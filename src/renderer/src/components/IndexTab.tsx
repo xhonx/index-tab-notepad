@@ -2,10 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Category } from '../../../main/db'
 import CategoryModal from './CategoryModal'
+import NoteEditor from './NoteEditor'
 
 const TAB_WIDTH_PX = 32
 const PANEL_WIDTH_PX = 360
 const TOTAL_WIDTH_PX = TAB_WIDTH_PX + PANEL_WIDTH_PX
+const PANEL_PADDING_PX = 16
+// 탭 스택이 패널 위(zIndex 2)에 얹혀서 오른쪽 TAB_WIDTH_PX만큼을 가리기 때문에,
+// 패널 안쪽 콘텐츠가 그 밑으로 들어가 겹치지 않도록 오른쪽에 탭 폭만큼 여백을 더 준다.
+const PANEL_CONTENT_PADDING = `${PANEL_PADDING_PX}px ${PANEL_PADDING_PX + TAB_WIDTH_PX}px ${PANEL_PADDING_PX}px ${PANEL_PADDING_PX}px`
 
 // windowManager.ts의 MAX_CATEGORIES와 동일하게 유지할 것 (창 크기 상한 계산 기준)
 const MAX_CATEGORIES = 5
@@ -150,11 +155,11 @@ function IndexTab(): React.JSX.Element {
               borderRadius: '8px 0 0 8px',
               boxShadow: '0 4px 24px rgba(0,0,0,0.2)',
               zIndex: 1, // 탭보다 아래
-              paddingRight: TAB_WIDTH_PX, // 탭 밑에 콘텐츠가 안 깔리게 여백
-              padding: '16px 16px 16px 16px',
+              padding: PANEL_CONTENT_PADDING, // 탭 밑에 콘텐츠가 안 깔리게 오른쪽에 탭 폭만큼 여백
               display: 'flex',
               flexDirection: 'column',
-              gap: 8
+              gap: 8,
+              overflow: 'hidden'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -256,9 +261,8 @@ function IndexTab(): React.JSX.Element {
               </div>
             </div>
 
-            <p style={{ color: '#999', fontSize: 13, margin: 0 }}>
-              여기에 {activeCategory.name} 메모 에디터가 들어갈 예정 (TipTap, 다음 단계)
-            </p>
+            {/* key로 강제 리마운트: 카테고리 전환 시 에디터 내부 상태(히스토리 등)를 깔끔하게 초기화 */}
+            <NoteEditor key={activeCategory.id} categoryId={activeCategory.id} />
           </motion.div>
         )}
       </AnimatePresence>

@@ -20,6 +20,8 @@ export interface DbAPI {
   reorderCategories: (orderedIds: string[]) => Promise<void>
   getSetting: (key: string) => Promise<string | null>
   setSetting: (key: string, value: string) => Promise<void>
+  getCategoryNote: (categoryId: string) => Promise<string>
+  saveCategoryNote: (categoryId: string, content: string) => Promise<void>
 }
 
 declare global {

@@ -26,9 +26,9 @@ export function initDatabase(): void {
       created_at INTEGER NOT NULL
     );
 
+    -- 카테고리당 문서 1개(계속 덮어쓰는 구조, PRD 4.1)이므로 category_id를 PK로 사용
     CREATE TABLE IF NOT EXISTS category_notes (
-      id TEXT PRIMARY KEY,
-      category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      category_id TEXT PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
       content TEXT NOT NULL DEFAULT '',
       updated_at INTEGER NOT NULL
     );
@@ -93,6 +93,22 @@ export const categoriesRepo = {
       ids.forEach((id, i) => update.run(i, id))
     })
     tx(orderedIds)
+  }
+}
+
+export const categoryNotesRepo = {
+  get(categoryId: string): string {
+    const row = db
+      .prepare('SELECT content FROM category_notes WHERE category_id = ?')
+      .get(categoryId) as { content: string } | undefined
+    return row?.content ?? ''
+  },
+  save(categoryId: string, content: string): void {
+    db.prepare(
+      `INSERT INTO category_notes (category_id, content, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(category_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`
+    ).run(categoryId, content, Date.now())
   }
 }
 

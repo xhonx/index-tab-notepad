@@ -13,3 +13,73 @@ body {
   background: transparent;
   overflow: hidden;
 }
+
+/* TipTap 메모 에디터 (NoteEditor.tsx) */
+.note-editor {
+  flex: 1;
+  min-height: 0; /* flex 자식이 부모 높이를 넘어가지 않고 내부 스크롤되도록 */
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.note-editor .ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+
+.note-editor .ProseMirror p {
+  margin: 0 0 6px;
+}
+
+/* PRD 4.2 — "[] 할일" 자동 체크박스 */
+.note-editor ul[data-type='taskList'] {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.note-editor ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.note-editor ul[data-type='taskList'] li > label {
+  flex: 0 0 auto;
+  user-select: none;
+  margin-top: 2px;
+}
+
+.note-editor ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+}
+
+.note-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+  text-decoration: line-through;
+  color: #aaa;
+}
+
+/* PRD 4.2 — "---섹션명---" 자동 구분선 */
+.note-editor .section-divider {
+  position: relative;
+  height: 1px;
+  margin: 16px 0 20px;
+  background: #e5e5e5;
+}
+
+.note-editor .section-divider[data-label]:not([data-label=''])::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { categoriesRepo, settingsRepo, type Category } from './db'
+import { categoriesRepo, categoryNotesRepo, settingsRepo, type Category } from './db'
 import { MAX_CATEGORIES } from './windowManager'
 
 // 카테고리 CRUD + 설정 저장/조회 IPC. 창 위치/드래그 관련 IPC는 windowManager.ts에서 관리.
@@ -30,4 +30,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('settings:get', (_e, key: string) => settingsRepo.get(key))
   ipcMain.handle('settings:set', (_e, key: string, value: string) => settingsRepo.set(key, value))
+
+  // 카테고리별 메모 문서 (PRD 4.1 — 카테고리 하나 = 문서 하나, 계속 덮어쓰는 구조)
+  ipcMain.handle('notes:get', (_e, categoryId: string) => categoryNotesRepo.get(categoryId))
+  ipcMain.handle('notes:save', (_e, categoryId: string, content: string) =>
+    categoryNotesRepo.save(categoryId, content)
+  )
 }

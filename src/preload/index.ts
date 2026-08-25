@@ -32,7 +32,11 @@ const dbAPI = {
     ipcRenderer.invoke('categories:reorder', orderedIds),
   getSetting: (key: string): Promise<string | null> => ipcRenderer.invoke('settings:get', key),
   setSetting: (key: string, value: string): Promise<void> =>
-    ipcRenderer.invoke('settings:set', key, value)
+    ipcRenderer.invoke('settings:set', key, value),
+  getCategoryNote: (categoryId: string): Promise<string> =>
+    ipcRenderer.invoke('notes:get', categoryId),
+  saveCategoryNote: (categoryId: string, content: string): Promise<void> =>
+    ipcRenderer.invoke('notes:save', categoryId, content)
 }
 
 // Custom APIs for renderer
