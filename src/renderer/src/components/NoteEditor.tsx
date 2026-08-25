@@ -1,15 +1,24 @@
 import { useEffect, useRef } from 'react'
-import { useEditor, EditorContent, Node, nodeInputRule } from '@tiptap/react'
+import { useEditor, EditorContent, Node } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 
 const AUTOSAVE_DEBOUNCE_MS = 500 // PRD 10장 비기능 요구사항
 
-// PRD 7.3① — "---섹션명---" (또는 라벨 없는 "---"만) 입력 시 Notion 스타일 구분선으로 자동 변환.
-// StarterKit 기본 HorizontalRule은 대시 3개만 typing해도 즉시 <hr>로 바꿔버려서
-// "---LAB---"처럼 뒤에 라벨을 더 입력할 기회 자체가 없어짐 -> 아래에서 horizontalRule을 꺼두고
-// 이 노드가 라벨 있는/없는 경우를 모두 처리한다.
+// "---텍스트---" (또는 라벨 없이 "---"만) 전체가 한 줄을 이룰 때만 매치.
+// 줄 앞뒤 공백은 트리밍 후 비교하므로 "---LAB--- " 처럼 끝에 스페이스가 남아있어도 인식된다.
+const LABELED_DIVIDER_RE = /^-{3,}\s*([^-\n]+?)\s*-{3,}$/
+const BARE_DIVIDER_RE = /^-{3,}$/
+
+// PRD 7.3① — "---섹션명---" 입력 후 Enter 시 Notion 스타일 구분선으로 자동 변환.
+// 처음엔 nodeInputRule(스페이스바가 입력될 때 매치)로 구현했었는데, PRD가 말하는 트리거는
+// "입력 후 Enter"라 스페이스 없이 바로 Enter를 치면 규칙이 아예 안 맞아서 대시가 그대로 남는
+// 버그가 있었음(사용자 리포트) -> Enter 키를 직접 가로채서 "현재 줄 전체 텍스트"가 패턴과
+// 일치하는지 검사하는 방식으로 교체. 이러면 스페이스 유무와 무관하게 항상 동작한다.
+//
+// StarterKit 기본 HorizontalRule도 이유는 다르지만 같은 부류 문제(대시 3개만 쳐도 즉시 <hr>로
+// 바뀌어 라벨을 더 입력할 기회가 없음)라서 꺼두고(horizontalRule: false) 이 노드로 통일한다.
 const SectionDivider = Node.create({
   name: 'sectionDivider',
   group: 'block',
@@ -31,21 +40,36 @@ const SectionDivider = Node.create({
       { 'data-section-divider': '', class: 'section-divider', 'data-label': node.attrs.label }
     ]
   },
-  addInputRules() {
-    return [
-      // 대시 3개 이상 + 라벨 + 대시 3개 이상 ("---LAB---" 형태)
-      nodeInputRule({
-        find: /^-{3,}\s*([^-\n]+?)\s*-{3,}\s$/,
-        type: this.type,
-        getAttributes: (match) => ({ label: (match[1] ?? '').trim() })
-      }),
-      // 라벨 없이 대시만 3개 이상 ("---"만 입력)
-      nodeInputRule({
-        find: /^-{3,}\s$/,
-        type: this.type,
-        getAttributes: () => ({ label: '' })
-      })
-    ]
+  addKeyboardShortcuts() {
+    return {
+      Enter: ({ editor }) => {
+        // IME(한글 등) 조합 중에 Enter가 조합 확정 용도로 쓰이는 경우까지 가로채지 않도록 방어
+        if (editor.view.composing) return false
+
+        const { selection } = editor.state
+        const { $from, empty } = selection
+        if (!empty || $from.parent.type.name !== 'paragraph') return false
+
+        const text = $from.parent.textContent.trim()
+        const labeled = text.match(LABELED_DIVIDER_RE)
+        const isBare = !labeled && BARE_DIVIDER_RE.test(text)
+        if (!labeled && !isBare) return false
+
+        const label = labeled ? labeled[1].trim() : ''
+        const from = $from.before()
+        const to = $from.after()
+
+        // 현재 줄(문단) 전체를 구분선 노드로 교체하고, 그 뒤에 이어서 쓸 수 있게 빈 문단을 하나 붙임
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from, to })
+          .insertContentAt(from, [{ type: this.name, attrs: { label } }, { type: 'paragraph' }])
+          .run()
+
+        return true
+      }
+    }
   }
 })
 
