@@ -60,4 +60,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('daily-notes:save', (_e, date: string, content: string) =>
     dailyNotesRepo.save(date, content)
   )
+  // 캘린더 뷰(M6) — 'YYYY-MM' 한 달치 완료율 요약
+  ipcMain.handle('daily-notes:list-month', (_e, yearMonth: string) =>
+    dailyNotesRepo.listMonth(yearMonth)
+  )
 }

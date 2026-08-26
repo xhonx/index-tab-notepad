@@ -4,6 +4,7 @@ import type { Category, CategoryNote } from '../../../main/db'
 import CategoryModal from './CategoryModal'
 import NoteEditor from './NoteEditor'
 import NoteListView from './NoteListView'
+import CalendarView from './CalendarView'
 
 const TAB_WIDTH_PX = 32
 const PANEL_WIDTH_PX = 360
@@ -55,6 +56,9 @@ function IndexTab(): React.JSX.Element {
   const [openNoteId, setOpenNoteId] = useState<string | null>(null)
   const [noteTitleDraft, setNoteTitleDraft] = useState('')
 
+  // Today Todo 전용 캘린더 뷰 (M6). 다른 탭으로 나갔다 오면 항상 편집 화면부터 다시 보여줌
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+
   // activeCategoryId가 바뀐 순간을 렌더 중에 감지해서 즉시 리셋 (React가 권장하는
   // "prop 변화에 따른 state 조정" 패턴 — effect 안에서 동기적으로 setState하는 것보다 한 렌더 빠름)
   const [prevActiveCategoryId, setPrevActiveCategoryId] = useState(activeCategoryId)
@@ -62,6 +66,7 @@ function IndexTab(): React.JSX.Element {
     setPrevActiveCategoryId(activeCategoryId)
     setOpenNoteId(null)
     setCategoryNotes([])
+    setIsCalendarOpen(false)
   }
 
   // SQLite에 저장된 카테고리 목록을 최초 1회 로드
@@ -227,7 +232,26 @@ function IndexTab(): React.JSX.Element {
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               {isTodayActive ? (
-                <h3 style={{ margin: 0, color: '#333' }}>✅ Today Todo</h3>
+                isCalendarOpen ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      onClick={() => setIsCalendarOpen(false)}
+                      title="Today Todo로"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        padding: 0
+                      }}
+                    >
+                      ←
+                    </button>
+                    <h3 style={{ margin: 0, color: '#333', fontSize: 14 }}>📅 캘린더</h3>
+                  </div>
+                ) : (
+                  <h3 style={{ margin: 0, color: '#333' }}>✅ Today Todo</h3>
+                )
               ) : openNote ? (
                 // 메모를 펼친 상태: 뒤로가기 + 메모 제목(직접 편집 가능)
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -295,6 +319,22 @@ function IndexTab(): React.JSX.Element {
               )}
 
               <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                {isTodayActive && !isCalendarOpen && (
+                  <button
+                    onClick={() => setIsCalendarOpen(true)}
+                    title="캘린더 보기"
+                    style={{
+                      fontSize: 12,
+                      padding: '3px 6px',
+                      borderRadius: 6,
+                      border: '1px solid #ddd',
+                      background: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📅
+                  </button>
+                )}
                 <button
                   onClick={togglePin}
                   title={isPinned ? 'Pin 해제' : 'Pin 고정 (클릭 아웃해도 안 접힘)'}
@@ -367,12 +407,16 @@ function IndexTab(): React.JSX.Element {
 
             {/* key로 강제 리마운트: 탭/메모/날짜 전환 시 에디터 내부 상태(히스토리 등)를 깔끔하게 초기화 */}
             {isTodayActive ? (
-              <NoteEditor
-                key={todayKey}
-                storageKey={todayKey}
-                loadContent={() => window.dbAPI.getDailyNote(todayKey)}
-                saveContent={(content) => window.dbAPI.saveDailyNote(todayKey, content)}
-              />
+              isCalendarOpen ? (
+                <CalendarView />
+              ) : (
+                <NoteEditor
+                  key={todayKey}
+                  storageKey={todayKey}
+                  loadContent={() => window.dbAPI.getDailyNote(todayKey)}
+                  saveContent={(content) => window.dbAPI.saveDailyNote(todayKey, content)}
+                />
+              )
             ) : openNote ? (
               <NoteEditor
                 key={openNote.id}

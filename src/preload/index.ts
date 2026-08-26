@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { Category, CategoryNote } from '../main/db'
+import type { Category, CategoryNote, DailyNoteSummary } from '../main/db'
 
 // 창 도킹/드래그/확장-축소 제어용 IPC 래퍼
 const tabAPI = {
@@ -47,7 +47,9 @@ const dbAPI = {
     ipcRenderer.invoke('category-notes:delete', noteId),
   getDailyNote: (date: string): Promise<string> => ipcRenderer.invoke('daily-notes:get', date),
   saveDailyNote: (date: string, content: string): Promise<void> =>
-    ipcRenderer.invoke('daily-notes:save', date, content)
+    ipcRenderer.invoke('daily-notes:save', date, content),
+  listDailyNotesMonth: (yearMonth: string): Promise<DailyNoteSummary[]> =>
+    ipcRenderer.invoke('daily-notes:list-month', yearMonth)
 }
 
 // Custom APIs for renderer

@@ -1,5 +1,5 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { Category, CategoryNote } from '../main/db'
+import type { Category, CategoryNote, DailyNoteSummary } from '../main/db'
 
 export interface TabAPI {
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => void
@@ -28,6 +28,7 @@ export interface DbAPI {
   deleteCategoryNote: (noteId: string) => Promise<void>
   getDailyNote: (date: string) => Promise<string>
   saveDailyNote: (date: string, content: string) => Promise<void>
+  listDailyNotesMonth: (yearMonth: string) => Promise<DailyNoteSummary[]>
 }
 
 declare global {

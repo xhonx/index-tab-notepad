@@ -220,6 +220,12 @@ export const categoryNotesRepo = {
   }
 }
 
+export interface DailyNoteSummary {
+  date: string
+  total: number
+  checked: number
+}
+
 export const dailyNotesRepo = {
   get(date: string): string {
     const row = db.prepare('SELECT content FROM daily_notes WHERE date = ?').get(date) as
@@ -232,6 +238,18 @@ export const dailyNotesRepo = {
        VALUES (?, ?, ?)
        ON CONFLICT(date) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`
     ).run(date, content, Date.now())
+  },
+  // 캘린더 뷰(M6)의 월간 완료율 표시용. TipTap TaskItem이 렌더링하는 data-checked="..." 속성
+  // 개수를 세는 방식이라 daily_sections/daily_todo_items 같은 별도 구조화 테이블 없이도 계산 가능
+  listMonth(yearMonth: string): DailyNoteSummary[] {
+    const rows = db
+      .prepare('SELECT date, content FROM daily_notes WHERE date LIKE ?')
+      .all(`${yearMonth}-%`) as { date: string; content: string }[]
+    return rows.map((row) => {
+      const total = (row.content.match(/data-checked="/g) ?? []).length
+      const checked = (row.content.match(/data-checked="true"/g) ?? []).length
+      return { date: row.date, total, checked }
+    })
   }
 }
 
