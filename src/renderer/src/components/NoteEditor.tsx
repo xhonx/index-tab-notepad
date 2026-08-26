@@ -121,12 +121,17 @@ function NoteEditor({ storageKey, loadContent, saveContent }: NoteEditorProps): 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- storageKey가 사실상의 identity, load/saveContent는 호출부에서 매 렌더 새로 만들어지는 클로저라 deps에 넣으면 무한 재로드됨
   }, [editor, storageKey])
 
-  // 언마운트 시 대기 중인 디바운스 저장을 즉시 반영 (탭 삭제/앱 종료 직전 유실 방지)
+  // 언마운트 시 대기 중인 디바운스 저장을 즉시 반영 (탭/메모 전환·리스트뷰 복귀 시 최대 500ms 유실 방지).
+  // 기존엔 clearTimeout만 하고 끝내서 "즉시 반영"이라는 주석과 달리 실제로는 저장을 취소해버리는 버그였음
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+        if (editor && !editor.isDestroyed) saveContentRef.current(editor.getHTML())
+      }
     }
-  }, [])
+  }, [editor])
 
   return (
     <div className="note-editor">

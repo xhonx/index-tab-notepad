@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { Category } from '../main/db'
+import type { Category, CategoryNote } from '../main/db'
 
 // 창 도킹/드래그/확장-축소 제어용 IPC 래퍼
 const tabAPI = {
@@ -33,10 +33,18 @@ const dbAPI = {
   getSetting: (key: string): Promise<string | null> => ipcRenderer.invoke('settings:get', key),
   setSetting: (key: string, value: string): Promise<void> =>
     ipcRenderer.invoke('settings:set', key, value),
-  getCategoryNote: (categoryId: string): Promise<string> =>
-    ipcRenderer.invoke('notes:get', categoryId),
-  saveCategoryNote: (categoryId: string, content: string): Promise<void> =>
-    ipcRenderer.invoke('notes:save', categoryId, content),
+  listCategoryNotes: (categoryId: string): Promise<CategoryNote[]> =>
+    ipcRenderer.invoke('category-notes:list', categoryId),
+  createCategoryNote: (categoryId: string, title: string): Promise<CategoryNote> =>
+    ipcRenderer.invoke('category-notes:create', categoryId, title),
+  getCategoryNoteContent: (noteId: string): Promise<string> =>
+    ipcRenderer.invoke('category-notes:get-content', noteId),
+  saveCategoryNoteContent: (noteId: string, content: string): Promise<void> =>
+    ipcRenderer.invoke('category-notes:save-content', noteId, content),
+  updateCategoryNoteTitle: (noteId: string, title: string): Promise<void> =>
+    ipcRenderer.invoke('category-notes:update-title', noteId, title),
+  deleteCategoryNote: (noteId: string): Promise<void> =>
+    ipcRenderer.invoke('category-notes:delete', noteId),
   getDailyNote: (date: string): Promise<string> => ipcRenderer.invoke('daily-notes:get', date),
   saveDailyNote: (date: string, content: string): Promise<void> =>
     ipcRenderer.invoke('daily-notes:save', date, content)

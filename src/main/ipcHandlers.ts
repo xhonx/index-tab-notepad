@@ -37,11 +37,23 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('settings:get', (_e, key: string) => settingsRepo.get(key))
   ipcMain.handle('settings:set', (_e, key: string, value: string) => settingsRepo.set(key, value))
 
-  // 카테고리별 메모 문서 (PRD 4.1 — 카테고리 하나 = 문서 하나, 계속 덮어쓰는 구조)
-  ipcMain.handle('notes:get', (_e, categoryId: string) => categoryNotesRepo.get(categoryId))
-  ipcMain.handle('notes:save', (_e, categoryId: string, content: string) =>
-    categoryNotesRepo.save(categoryId, content)
+  // 카테고리별 메모 리스트 (사용자 요청: 카테고리 하나에 메모 여러 개, 리스트뷰에서 클릭해서 열기)
+  ipcMain.handle('category-notes:list', (_e, categoryId: string) =>
+    categoryNotesRepo.listByCategory(categoryId)
   )
+  ipcMain.handle('category-notes:create', (_e, categoryId: string, title: string) =>
+    categoryNotesRepo.create(categoryId, title)
+  )
+  ipcMain.handle('category-notes:get-content', (_e, noteId: string) =>
+    categoryNotesRepo.getContent(noteId)
+  )
+  ipcMain.handle('category-notes:save-content', (_e, noteId: string, content: string) =>
+    categoryNotesRepo.saveContent(noteId, content)
+  )
+  ipcMain.handle('category-notes:update-title', (_e, noteId: string, title: string) =>
+    categoryNotesRepo.updateTitle(noteId, title)
+  )
+  ipcMain.handle('category-notes:delete', (_e, noteId: string) => categoryNotesRepo.remove(noteId))
 
   // Today Todo (PRD 4.1) — 날짜(YYYY-MM-DD)를 키로 쌓이는 별도 문서
   ipcMain.handle('daily-notes:get', (_e, date: string) => dailyNotesRepo.get(date))

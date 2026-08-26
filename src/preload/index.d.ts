@@ -1,5 +1,5 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { Category } from '../main/db'
+import type { Category, CategoryNote } from '../main/db'
 
 export interface TabAPI {
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => void
@@ -20,8 +20,12 @@ export interface DbAPI {
   reorderCategories: (orderedIds: string[]) => Promise<void>
   getSetting: (key: string) => Promise<string | null>
   setSetting: (key: string, value: string) => Promise<void>
-  getCategoryNote: (categoryId: string) => Promise<string>
-  saveCategoryNote: (categoryId: string, content: string) => Promise<void>
+  listCategoryNotes: (categoryId: string) => Promise<CategoryNote[]>
+  createCategoryNote: (categoryId: string, title: string) => Promise<CategoryNote>
+  getCategoryNoteContent: (noteId: string) => Promise<string>
+  saveCategoryNoteContent: (noteId: string, content: string) => Promise<void>
+  updateCategoryNoteTitle: (noteId: string, title: string) => Promise<void>
+  deleteCategoryNote: (noteId: string) => Promise<void>
   getDailyNote: (date: string) => Promise<string>
   saveDailyNote: (date: string, content: string) => Promise<void>
 }

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { Category } from '../../../main/db'
+import type { Category, CategoryNote } from '../../../main/db'
 import CategoryModal from './CategoryModal'
 import NoteEditor from './NoteEditor'
+import NoteListView from './NoteListView'
 
 const TAB_WIDTH_PX = 32
 const PANEL_WIDTH_PX = 360
@@ -49,6 +50,20 @@ function IndexTab(): React.JSX.Element {
   const [renameValue, setRenameValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
+  // 카테고리 안에 메모 여러 개 (리스트뷰). 카테고리를 바꾸면 목록을 새로 불러오고, 열려있던 메모는 닫힘
+  const [categoryNotes, setCategoryNotes] = useState<CategoryNote[]>([])
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null)
+  const [noteTitleDraft, setNoteTitleDraft] = useState('')
+
+  // activeCategoryId가 바뀐 순간을 렌더 중에 감지해서 즉시 리셋 (React가 권장하는
+  // "prop 변화에 따른 state 조정" 패턴 — effect 안에서 동기적으로 setState하는 것보다 한 렌더 빠름)
+  const [prevActiveCategoryId, setPrevActiveCategoryId] = useState(activeCategoryId)
+  if (activeCategoryId !== prevActiveCategoryId) {
+    setPrevActiveCategoryId(activeCategoryId)
+    setOpenNoteId(null)
+    setCategoryNotes([])
+  }
+
   // SQLite에 저장된 카테고리 목록을 최초 1회 로드
   useEffect(() => {
     window.dbAPI.listCategories().then(setCategories)
@@ -70,6 +85,12 @@ function IndexTab(): React.JSX.Element {
     const interval = setInterval(() => setTodayKey(getTodayKey()), 30_000)
     return () => clearInterval(interval)
   }, [])
+
+  // 카테고리 탭이 활성화되면 그 카테고리의 메모 목록을 로드 (열림/닫힘 리셋은 위 렌더 중 조정에서 처리)
+  useEffect(() => {
+    if (activeCategoryId === TODAY_TAB_ID) return
+    window.dbAPI.listCategoryNotes(activeCategoryId).then(setCategoryNotes)
+  }, [activeCategoryId])
 
   const handleMouseDown = (e: React.MouseEvent): void => {
     if (e.button !== 0) return
@@ -141,8 +162,34 @@ function IndexTab(): React.JSX.Element {
     }
   }
 
+  const handleOpenNote = (noteId: string): void => {
+    const note = categoryNotes.find((n) => n.id === noteId)
+    setNoteTitleDraft(note?.title ?? '')
+    setOpenNoteId(noteId)
+  }
+
+  const handleCreateNote = async (): Promise<void> => {
+    const created = await window.dbAPI.createCategoryNote(activeCategoryId, '')
+    setCategoryNotes((prev) => [...prev, created])
+    setNoteTitleDraft('')
+    setOpenNoteId(created.id) // 만들자마자 바로 편집 화면으로 진입
+  }
+
+  const handleDeleteNote = async (noteId: string): Promise<void> => {
+    await window.dbAPI.deleteCategoryNote(noteId)
+    setCategoryNotes((prev) => prev.filter((n) => n.id !== noteId))
+    if (openNoteId === noteId) setOpenNoteId(null)
+  }
+
+  const commitNoteTitle = async (noteId: string): Promise<void> => {
+    const trimmed = noteTitleDraft.trim()
+    await window.dbAPI.updateCategoryNoteTitle(noteId, trimmed)
+    setCategoryNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, title: trimmed } : n)))
+  }
+
   const isTodayActive = activeCategoryId === TODAY_TAB_ID
   const activeCategory = categories.find((c) => c.id === activeCategoryId)
+  const openNote = openNoteId ? categoryNotes.find((n) => n.id === openNoteId) : undefined
 
   return (
     <div
@@ -181,6 +228,42 @@ function IndexTab(): React.JSX.Element {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               {isTodayActive ? (
                 <h3 style={{ margin: 0, color: '#333' }}>✅ Today Todo</h3>
+              ) : openNote ? (
+                // 메모를 펼친 상태: 뒤로가기 + 메모 제목(직접 편집 가능)
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <button
+                    onClick={() => setOpenNoteId(null)}
+                    title="목록으로"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: 0,
+                      flexShrink: 0
+                    }}
+                  >
+                    ←
+                  </button>
+                  <input
+                    value={noteTitleDraft}
+                    placeholder="제목 없음"
+                    onChange={(e) => setNoteTitleDraft(e.target.value)}
+                    onBlur={() => commitNoteTitle(openNote.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    }}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      border: 'none',
+                      outline: 'none',
+                      minWidth: 0,
+                      flex: 1,
+                      color: activeCategory?.color
+                    }}
+                  />
+                </div>
               ) : renamingId === activeCategory!.id ? (
                 <input
                   autoFocus
@@ -211,7 +294,7 @@ function IndexTab(): React.JSX.Element {
                 </h3>
               )}
 
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
                 <button
                   onClick={togglePin}
                   title={isPinned ? 'Pin 해제' : 'Pin 고정 (클릭 아웃해도 안 접힘)'}
@@ -228,8 +311,9 @@ function IndexTab(): React.JSX.Element {
                   📌
                 </button>
 
-                {/* Today Todo는 카테고리가 아니라서 이름 변경/삭제 대상이 아님 */}
+                {/* 카테고리 삭제는 리스트뷰(메모 안 열려있을 때)에서만. Today Todo는 카테고리가 아니라서 대상 아님 */}
                 {!isTodayActive &&
+                  !openNote &&
                   (confirmDeleteId === activeCategory!.id ? (
                     <>
                       <button
@@ -281,7 +365,7 @@ function IndexTab(): React.JSX.Element {
               </div>
             </div>
 
-            {/* key로 강제 리마운트: 탭/날짜 전환 시 에디터 내부 상태(히스토리 등)를 깔끔하게 초기화 */}
+            {/* key로 강제 리마운트: 탭/메모/날짜 전환 시 에디터 내부 상태(히스토리 등)를 깔끔하게 초기화 */}
             {isTodayActive ? (
               <NoteEditor
                 key={todayKey}
@@ -289,14 +373,21 @@ function IndexTab(): React.JSX.Element {
                 loadContent={() => window.dbAPI.getDailyNote(todayKey)}
                 saveContent={(content) => window.dbAPI.saveDailyNote(todayKey, content)}
               />
-            ) : (
+            ) : openNote ? (
               <NoteEditor
-                key={activeCategory!.id}
-                storageKey={activeCategory!.id}
-                loadContent={() => window.dbAPI.getCategoryNote(activeCategory!.id)}
+                key={openNote.id}
+                storageKey={openNote.id}
+                loadContent={() => window.dbAPI.getCategoryNoteContent(openNote.id)}
                 saveContent={(content) =>
-                  window.dbAPI.saveCategoryNote(activeCategory!.id, content)
+                  window.dbAPI.saveCategoryNoteContent(openNote.id, content)
                 }
+              />
+            ) : (
+              <NoteListView
+                notes={categoryNotes}
+                onOpenNote={handleOpenNote}
+                onCreateNote={handleCreateNote}
+                onDeleteNote={handleDeleteNote}
               />
             )}
           </motion.div>

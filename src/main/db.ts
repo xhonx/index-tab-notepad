@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto'
 const dbPath = join(app.getPath('userData'), 'index-tab-notepad.db')
 export const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
+db.pragma('foreign_keys = ON') // category_notes/daily_notes 등의 ON DELETE CASCADE가 실제로 동작하려면 필요
 
 export interface Category {
   id: string
@@ -16,7 +17,63 @@ export interface Category {
   created_at: number
 }
 
+export interface CategoryNote {
+  id: string
+  category_id: string
+  title: string
+  order_index: number
+  created_at: number
+  updated_at: number
+}
+
+// 카테고리 하나 = 문서 하나였던 구 스키마(category_id가 PK)를 카테고리 하나 = 메모 여러 개
+// 구조(리스트뷰, 사용자 요청)로 바꾸면서 필요해진 마이그레이션. 이미 새 스키마면 아무것도 안 함.
+function migrateCategoryNotesTable(): void {
+  const columns = db.prepare('PRAGMA table_info(category_notes)').all() as { name: string }[]
+  if (columns.length === 0) return // 테이블이 아직 없음(최초 실행) — 아래서 새 스키마로 바로 생성됨
+  if (columns.some((c) => c.name === 'id')) return // 이미 새 스키마
+
+  const oldRows = db
+    .prepare('SELECT category_id, content, updated_at FROM category_notes')
+    .all() as {
+    category_id: string
+    content: string
+    updated_at: number
+  }[]
+
+  db.exec('ALTER TABLE category_notes RENAME TO category_notes_old_v1')
+  db.exec(`
+    CREATE TABLE category_notes (
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      order_index INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `)
+  const insert = db.prepare(
+    `INSERT INTO category_notes (id, category_id, title, content, order_index, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, ?, ?)`
+  )
+  oldRows.forEach((row) => {
+    if (!row.content) return // 빈 문서였던 카테고리는 옮길 내용이 없으므로 건너뜀
+    insert.run(
+      randomUUID(),
+      row.category_id,
+      '이전 메모',
+      row.content,
+      row.updated_at,
+      row.updated_at
+    )
+  })
+  db.exec('DROP TABLE category_notes_old_v1')
+}
+
 export function initDatabase(): void {
+  migrateCategoryNotesTable()
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
       id TEXT PRIMARY KEY,
@@ -26,10 +83,14 @@ export function initDatabase(): void {
       created_at INTEGER NOT NULL
     );
 
-    -- 카테고리당 문서 1개(계속 덮어쓰는 구조, PRD 4.1)이므로 category_id를 PK로 사용
+    -- 카테고리 하나에 메모 여러 개(리스트뷰): 목록은 제목만, 본문(content)은 열었을 때만 조회
     CREATE TABLE IF NOT EXISTS category_notes (
-      category_id TEXT PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT '',
       content TEXT NOT NULL DEFAULT '',
+      order_index INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
 
@@ -105,18 +166,57 @@ export const categoriesRepo = {
 }
 
 export const categoryNotesRepo = {
-  get(categoryId: string): string {
-    const row = db
-      .prepare('SELECT content FROM category_notes WHERE category_id = ?')
-      .get(categoryId) as { content: string } | undefined
+  // 목록용 — content는 빼고 제목/시각만 (패널이 좁아서 미리보기는 아직 안 보여줌)
+  listByCategory(categoryId: string): CategoryNote[] {
+    return db
+      .prepare(
+        `SELECT id, category_id, title, order_index, created_at, updated_at
+         FROM category_notes WHERE category_id = ? ORDER BY order_index ASC`
+      )
+      .all(categoryId) as CategoryNote[]
+  },
+  getContent(noteId: string): string {
+    const row = db.prepare('SELECT content FROM category_notes WHERE id = ?').get(noteId) as
+      { content: string } | undefined
     return row?.content ?? ''
   },
-  save(categoryId: string, content: string): void {
+  create(categoryId: string, title: string): CategoryNote {
+    const { maxOrder } = db
+      .prepare(
+        'SELECT COALESCE(MAX(order_index), -1) as maxOrder FROM category_notes WHERE category_id = ?'
+      )
+      .get(categoryId) as { maxOrder: number }
+    const now = Date.now()
+    const note: CategoryNote = {
+      id: randomUUID(),
+      category_id: categoryId,
+      title,
+      order_index: maxOrder + 1,
+      created_at: now,
+      updated_at: now
+    }
     db.prepare(
-      `INSERT INTO category_notes (category_id, content, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(category_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`
-    ).run(categoryId, content, Date.now())
+      `INSERT INTO category_notes (id, category_id, title, content, order_index, created_at, updated_at)
+       VALUES (@id, @category_id, @title, '', @order_index, @created_at, @updated_at)`
+    ).run(note)
+    return note
+  },
+  updateTitle(noteId: string, title: string): void {
+    db.prepare('UPDATE category_notes SET title = ?, updated_at = ? WHERE id = ?').run(
+      title,
+      Date.now(),
+      noteId
+    )
+  },
+  saveContent(noteId: string, content: string): void {
+    db.prepare('UPDATE category_notes SET content = ?, updated_at = ? WHERE id = ?').run(
+      content,
+      Date.now(),
+      noteId
+    )
+  },
+  remove(noteId: string): void {
+    db.prepare('DELETE FROM category_notes WHERE id = ?').run(noteId)
   }
 }
 
