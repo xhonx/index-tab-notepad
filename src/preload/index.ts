@@ -17,6 +17,12 @@ const tabAPI = {
     const listener = (): void => callback()
     ipcRenderer.on('force-collapse', listener)
     return () => ipcRenderer.removeListener('force-collapse', listener)
+  },
+  // 트레이 아이콘 좌클릭/컨텍스트 메뉴에서 펼침·접힘 토글을 요청할 때 호출됨. 구독 해제 함수를 반환.
+  onTrayToggle: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('tray-toggle', listener)
+    return () => ipcRenderer.removeListener('tray-toggle', listener)
   }
 }
 

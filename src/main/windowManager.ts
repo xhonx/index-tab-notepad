@@ -56,6 +56,9 @@ export function createTabWindow(): BrowserWindow {
   )
   const win = new BrowserWindow({
     ...bounds,
+    // 패키징된 빌드는 electron-builder.yml의 build/icon.ico가 실행 파일 아이콘으로 쓰이지만,
+    // dev 모드(npm run dev)는 electron.exe 기본 아이콘이 뜨므로 taskbar 아이콘도 맞춰주려고 명시
+    icon: join(__dirname, '../../resources/icon.png'),
     frame: false,
     transparent: true,
     alwaysOnTop: true,

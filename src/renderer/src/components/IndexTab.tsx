@@ -84,6 +84,18 @@ function IndexTab(): React.JSX.Element {
     return window.tabAPI.onForceCollapse(() => setIsExpanded(false))
   }, [])
 
+  // 트레이 아이콘 좌클릭/컨텍스트 메뉴 — 탭을 직접 클릭했을 때와 같은 경로를 타도록
+  // activeCategoryId는 그대로 두고 펼침 여부만 토글
+  useEffect(() => {
+    return window.tabAPI.onTrayToggle(() => {
+      setIsExpanded((prev) => {
+        const next = !prev
+        if (next) window.tabAPI.expandWindow()
+        return next
+      })
+    })
+  }, [])
+
   // 자정 전환 감지 (PRD 10장): 30초마다 오늘 날짜를 다시 계산해서 바뀌었으면 Today Todo를 새 문서로 갱신.
   // todayKey가 바뀌면 아래 NoteEditor가 key로 리마운트되어 자동으로 새 날짜 문서를 로드함
   useEffect(() => {

@@ -10,6 +10,7 @@ export interface TabAPI {
   updateTabCount: (count: number) => void
   setPinned: (pinned: boolean) => void
   onForceCollapse: (callback: () => void) => () => void
+  onTrayToggle: (callback: () => void) => () => void
 }
 
 export interface DbAPI {

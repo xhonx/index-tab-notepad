@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.xhonx.indextabnotepad
 productName: index-tab-notepad
 directories:
   buildResources: build
