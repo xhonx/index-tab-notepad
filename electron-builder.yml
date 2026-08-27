@@ -38,6 +38,12 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# electron-updater(자동 업데이트)가 여기서 지정한 GitHub 저장소의 Releases를 확인해서
+# 현재 실행 중인 버전보다 태그가 높으면 새 설치 파일을 받아옴. 릴리즈를 실제로 올리려면
+# `npm run build:win -- --publish always` 를 GH_TOKEN 환경변수(레포에 대한 쓰기 권한이
+# 있는 GitHub 개인 액세스 토큰)와 함께 실행해야 함 — 토큰 없이 그냥 build:win만 돌리면
+# latest.yml만 로컬에 생성되고 실제 업로드는 안 됨(publish: never와 동일하게 동작)
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: xhonx
+  repo: index-tab-notepad

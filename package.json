@@ -28,6 +28,7 @@
     "@tiptap/react": "^3.30.2",
     "@tiptap/starter-kit": "^3.30.2",
     "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9",
     "framer-motion": "^13.1.0"
   },
   "devDependencies": {

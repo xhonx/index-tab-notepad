@@ -4,6 +4,7 @@ import { createTabWindow } from './windowManager'
 import { initDatabase } from './db'
 import { registerIpcHandlers } from './ipcHandlers'
 import { createTray } from './trayManager'
+import { initAutoUpdater, checkForUpdatesManually } from './updater'
 
 // 인스턴스가 여러 개 동시에 뜨면 같은 SQLite 파일에 각자 initDatabase()(=마이그레이션 포함)를
 // 돌리면서 서로 스키마를 덮어쓰는 경쟁 상태가 생길 수 있음 (실제로 이 문제로 category_notes
@@ -41,10 +42,18 @@ if (!gotSingleInstanceLock) {
 
     // 트레이 좌클릭/컨텍스트 메뉴의 "열기 / 접기" → 렌더러에 토글 요청만 보냄. 실제 펼침/접힘은
     // IndexTab.tsx가 탭 클릭 때와 동일한 경로로 처리 (애니메이션·activeCategoryId 유지 위함)
-    createTray(() => {
-      const [win] = BrowserWindow.getAllWindows()
-      win?.webContents.send('tray-toggle')
-    })
+    createTray(
+      () => {
+        const [win] = BrowserWindow.getAllWindows()
+        win?.webContents.send('tray-toggle')
+      },
+      () => checkForUpdatesManually()
+    )
+
+    // GitHub Releases(electron-builder.yml의 publish: github)를 배포 채널로 써서 자동 업데이트.
+    // dev 모드에는 electron-builder가 만드는 app-update.yml이 없어서 updater.ts 안에서
+    // is.dev면 조용히 아무 것도 안 하도록 가드해둠
+    initAutoUpdater()
 
     app.on('activate', function () {
       if (BrowserWindow.getAllWindows().length === 0) createTabWindow()

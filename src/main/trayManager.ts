@@ -15,7 +15,7 @@ function getIconPath(): string {
 // 조용히 없어짐(Electron 공식 문서 경고 사항) → 모듈 스코프에 붙잡아둠
 let trayInstance: Tray | null = null
 
-export function createTray(onToggle: () => void): Tray {
+export function createTray(onToggle: () => void, onCheckForUpdates: () => void): Tray {
   const icon = nativeImage.createFromPath(getIconPath()).resize({ width: 16, height: 16 })
   const tray = new Tray(icon)
   trayInstance = tray
@@ -23,6 +23,8 @@ export function createTray(onToggle: () => void): Tray {
 
   const contextMenu = Menu.buildFromTemplate([
     { label: '열기 / 접기', click: onToggle },
+    { type: 'separator' },
+    { label: '업데이트 확인', click: onCheckForUpdates },
     { type: 'separator' },
     { label: '종료', click: () => app.quit() }
   ])
