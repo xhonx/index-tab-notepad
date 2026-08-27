@@ -2,37 +2,59 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
+import type { Category, CategoryNote, DailyNoteSummary } from '../shared/types'
+
+export type { Category, CategoryNote, DailyNoteSummary }
 
 // PRD 8장 데이터 모델 참고. userData 경로에 저장 (프로젝트 루트의 database.db와는 별개)
 const dbPath = join(app.getPath('userData'), 'index-tab-notepad.db')
-export const db = new Database(dbPath)
+// composite 프로젝트(tsconfig.node.json)가 .d.ts를 만들 때 better-sqlite3의 인스턴스 타입을
+// 직접 이름 붙일 수 없다고 에러내서(TS4023) 명시적으로 타입을 붙여줌
+export const db: Database.Database = new Database(dbPath)
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON') // category_notes/daily_notes 등의 ON DELETE CASCADE가 실제로 동작하려면 필요
 
-export interface Category {
-  id: string
-  name: string
-  color: string
-  order_index: number
-  created_at: number
-}
-
-export interface CategoryNote {
-  id: string
-  category_id: string
-  title: string
-  order_index: number
-  created_at: number
-  updated_at: number
-}
-
 // 카테고리 하나 = 문서 하나였던 구 스키마(category_id가 PK)를 카테고리 하나 = 메모 여러 개
-// 구조(리스트뷰, 사용자 요청)로 바꾸면서 필요해진 마이그레이션. 이미 새 스키마면 아무것도 안 함.
+// 구조(리스트뷰, 사용자 요청)로 바꾸면서 필요해진 마이그레이션.
+//
+// 처음엔 "id 컬럼이 있으면 이미 새 스키마"로만 판단했는데, 실제로는 id는 있지만
+// title/order_index/created_at은 없는 제3의 중간 상태가 발견됨 (아마 여러 electron
+// 프로세스가 동시에 떠서 — 이 앱에 app.requestSingleInstanceLock()이 없었음 — 마이그레이션이
+// 겹쳐 실행되며 생긴 것으로 추정). 그래서 이제는 "무엇이 없는지"를 직접 보고 부족한 부분만
+// 고치는 방식으로 바꿔서, 어떤 상태에서 시작하든 최종적으로 완전한 새 스키마가 되도록 함.
 function migrateCategoryNotesTable(): void {
   const columns = db.prepare('PRAGMA table_info(category_notes)').all() as { name: string }[]
   if (columns.length === 0) return // 테이블이 아직 없음(최초 실행) — 아래서 새 스키마로 바로 생성됨
-  if (columns.some((c) => c.name === 'id')) return // 이미 새 스키마
 
+  const names = new Set(columns.map((c) => c.name))
+  if (names.has('title') && names.has('order_index') && names.has('created_at')) return // 이미 완전한 새 스키마
+
+  if (names.has('id')) {
+    // id는 이미 있음(구버전 category_id-PK 스키마는 아님) — 부족한 컬럼만 채워 넣는 방식으로 복구
+    if (!names.has('title')) {
+      db.exec("ALTER TABLE category_notes ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+    }
+    if (!names.has('created_at')) {
+      db.exec('ALTER TABLE category_notes ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0')
+    }
+    if (!names.has('order_index')) {
+      db.exec('ALTER TABLE category_notes ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0')
+      // 카테고리별로 기존에 만들어진 순서(rowid) 그대로 order_index를 채워줌
+      const rows = db
+        .prepare('SELECT id, category_id FROM category_notes ORDER BY category_id, rowid')
+        .all() as { id: string; category_id: string }[]
+      const update = db.prepare('UPDATE category_notes SET order_index = ? WHERE id = ?')
+      const counters = new Map<string, number>()
+      rows.forEach((row) => {
+        const next = counters.get(row.category_id) ?? 0
+        update.run(next, row.id)
+        counters.set(row.category_id, next + 1)
+      })
+    }
+    return
+  }
+
+  // 진짜 구버전 스키마 — 카테고리 하나 = 문서 하나(category_id가 PK), id 자체가 없음
   const oldRows = db
     .prepare('SELECT category_id, content, updated_at FROM category_notes')
     .all() as {
@@ -218,12 +240,6 @@ export const categoryNotesRepo = {
   remove(noteId: string): void {
     db.prepare('DELETE FROM category_notes WHERE id = ?').run(noteId)
   }
-}
-
-export interface DailyNoteSummary {
-  date: string
-  total: number
-  checked: number
 }
 
 export const dailyNotesRepo = {

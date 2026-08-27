@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { Category, CategoryNote } from '../../../main/db'
+import type { Category, CategoryNote } from '../../../shared/types'
 import CategoryModal from './CategoryModal'
 import NoteEditor from './NoteEditor'
 import NoteListView from './NoteListView'

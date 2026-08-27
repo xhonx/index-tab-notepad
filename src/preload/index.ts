@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { Category, CategoryNote, DailyNoteSummary } from '../main/db'
+import type { Category, CategoryNote, DailyNoteSummary } from '../shared/types'
 
 // 창 도킹/드래그/확장-축소 제어용 IPC 래퍼
 const tabAPI = {

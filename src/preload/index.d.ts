@@ -1,5 +1,5 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { Category, CategoryNote, DailyNoteSummary } from '../main/db'
+import type { Category, CategoryNote, DailyNoteSummary } from '../shared/types'
 
 export interface TabAPI {
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => void

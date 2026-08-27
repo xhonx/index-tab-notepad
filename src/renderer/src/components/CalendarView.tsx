@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { DailyNoteSummary } from '../../../main/db'
+import type { DailyNoteSummary } from '../../../shared/types'
 
-const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+// 월요일 시작 (사용자 요청). Date.getDay()는 0=일~6=토라서 그대로 못 쓰고 아래 toMondayFirst로 변환해서 씀
+const WEEKDAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
+
+// Date.getDay()의 0=일~6=토 인덱스를 0=월~6=일로 바꿔줌
+function toMondayFirst(getDayResult: number): number {
+  return (getDayResult + 6) % 7
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -104,7 +110,7 @@ function CalendarView(): React.JSX.Element {
   }
 
   const daysInMonth = new Date(year, month0 + 1, 0).getDate()
-  const startWeekday = new Date(year, month0, 1).getDay() // 0=일
+  const startWeekday = toMondayFirst(new Date(year, month0, 1).getDay())
   const cells: (number | null)[] = [
     ...Array(startWeekday).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1)

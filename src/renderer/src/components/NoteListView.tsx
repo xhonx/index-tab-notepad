@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { CategoryNote } from '../../../main/db'
+import type { CategoryNote } from '../../../shared/types'
 
 interface NoteListViewProps {
   notes: CategoryNote[]
