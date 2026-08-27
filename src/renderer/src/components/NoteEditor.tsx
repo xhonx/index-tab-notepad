@@ -81,8 +81,17 @@ const SectionDivider = Node.create({
 // 줄 안에서 findWrapping이 조용히 null을 반환해 규칙 자체가 통째로 무효화됨. Today Todo는
 // 사실상 전부 체크박스 줄이라 실사용에서 거의 항상 이 케이스에 걸렸던 것.
 // -> Space 키를 직접 가로채서, 체크박스 줄이면 liftListItem으로 먼저 리스트 밖으로 꺼낸
-//    뒤 wrapInList로 불릿 리스트로 감싸는 방식으로 우회. (liftListItem/wrapInList 둘 다
-//    @tiptap/core 기본 Commands 확장에 포함돼 있어 별도 패키지 설치 없이 바로 쓸 수 있음)
+//    뒤 wrapInList로 불릿 리스트로 감싸는 방식으로 우회.
+//
+// 1차 구현(deleteRange().liftListItem().wrapInList()를 체인 하나로 묶음)은 실제로 또
+// 안 먹었음(재현: 헤드리스 에디터로 직접 트랜잭션 검사). 원인은 prosemirror-schema-list의
+// liftListItem/wrapInList가 내부에서 `let tr = state.tr`로 "새 트랜잭션"을 가정하고 그
+// tr.mapping을 이용해 위치를 재매핑하는데, Tiptap의 체인은 여러 커맨드를 "하나의 트랜잭션"에
+// 이어붙이는 구조라 state.tr이 매번 새 트랜잭션이 아니라 "이미 이전 스텝이 적용된 그 트랜잭션
+// 그대로"를 돌려줌. 그러면 liftListItem이 이미 현재 위치인 값을 tr.mapping으로 한 번 더
+// 매핑해버려서(이중 매핑) 내부 위치 검증이 어긋나 조용히 false를 반환함. wrapInList는 이 문제가
+// 없어서(자체적으로 위치 재매핑을 안 함) deleteRange와는 한 체인에 묶어도 되지만, liftListItem은
+// 안전하게 별도 트랜잭션(별도 .run() 호출)으로 분리해야 함
 const DASH_BULLET_RE = /^[-*+]$/
 
 const DashBulletFix = Extension.create({
@@ -103,12 +112,21 @@ const DashBulletFix = Extension.create({
 
         const inTaskItem = editor.isActive('taskItem')
         const deleteFrom = $from.pos - textBefore.length
+        const deleteTo = $from.pos
 
-        const chain = editor.chain().focus().deleteRange({ from: deleteFrom, to: $from.pos })
-        if (inTaskItem) chain.liftListItem('taskItem')
-        chain.wrapInList('bulletList')
+        if (!inTaskItem) {
+          // 일반 문단이면 liftListItem이 필요 없어서 한 트랜잭션으로 묶어도 안전함
+          return editor
+            .chain()
+            .focus()
+            .deleteRange({ from: deleteFrom, to: deleteTo })
+            .wrapInList('bulletList')
+            .run()
+        }
 
-        return chain.run()
+        editor.chain().focus().deleteRange({ from: deleteFrom, to: deleteTo }).run()
+        editor.chain().liftListItem('taskItem').run()
+        return editor.chain().wrapInList('bulletList').run()
       }
     }
   }
