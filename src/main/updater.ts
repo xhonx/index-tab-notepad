@@ -31,7 +31,7 @@ function checkForUpdates(manual: boolean): void {
     if (manual) {
       dialog.showMessageBox({
         type: 'info',
-        title: '업데이트 확인',
+        title: '인덱스탭 메모장 업데이트 확인',
         message: '업데이트를 확인하지 못했습니다.',
         detail: '인터넷 연결을 확인하거나 잠시 후 다시 시도해주세요.'
       })
@@ -42,7 +42,7 @@ function checkForUpdates(manual: boolean): void {
     autoUpdater.once('update-not-available', () => {
       dialog.showMessageBox({
         type: 'info',
-        title: '업데이트 확인',
+        title: '인덱스탭 메모장 업데이트 확인',
         message: '이미 최신 버전을 사용하고 있습니다.',
         detail: `현재 버전: ${app.getVersion()}`
       })
@@ -66,11 +66,15 @@ export function initAutoUpdater(): void {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    // 다이얼로그 타이틀/본문에 앱 이름을 명확히 박아둠 — "업데이트 준비 완료"처럼 출처가
+    // 안 드러나는 문구만 뜨면 사용자가 낯선 팝업(바이러스/애드웨어 창)으로 오해할 수 있어서
+    // (실제 사용자 우려 리포트로 발견), 어느 앱이 왜 뜬 건지 한눈에 알 수 있게 바꿈
     const options = {
       type: 'info' as const,
-      title: '업데이트 준비 완료',
-      message: `새 버전(${info.version})이 준비되었습니다.`,
-      detail: '지금 재시작해서 설치할까요? "나중에"를 누르면 다음에 앱을 껐다 켤 때 자동으로 설치됩니다.',
+      title: '인덱스탭 메모장 업데이트',
+      message: `인덱스탭 메모장 새 버전(v${info.version})이 준비됐습니다.`,
+      detail:
+        '지금 재시작해서 설치할까요? "나중에"를 누르면 다음에 인덱스탭 메모장을 완전히 껐다 켤 때 자동으로 설치됩니다.',
       buttons: ['지금 재시작', '나중에'],
       defaultId: 0,
       cancelId: 1
