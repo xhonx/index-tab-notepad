@@ -129,22 +129,9 @@ export function initDatabase(): void {
       value TEXT
     );
   `)
-
-  // 최초 실행 시에만 PRD 9장 예시와 동일한 기본 카테고리를 시드
-  const { count } = db.prepare('SELECT COUNT(*) as count FROM categories').get() as {
-    count: number
-  }
-  if (count === 0) {
-    const seed = [
-      { name: 'LAB', color: '#bad2f0' },
-      { name: '쉴더스', color: '#ebdfab' },
-      { name: '개인공부', color: '#c1ecd1' }
-    ]
-    const insert = db.prepare(
-      'INSERT INTO categories (id, name, color, order_index, created_at) VALUES (?, ?, ?, ?, ?)'
-    )
-    seed.forEach((c, i) => insert.run(randomUUID(), c.name, c.color, i, Date.now()))
-  }
+  // 개발 중엔 여기서 개발자 개인용 카테고리(LAB/쉴더스/개인공부)를 기본 시드했었는데,
+  // 배포용 빌드에 그대로 들어가면 안 되는 테스트 데이터라 제거함. 새로 설치하면
+  // 카테고리 0개인 완전히 빈 상태로 시작하고, "+ 카테고리 추가"로 직접 만들어야 함
 }
 
 export const categoriesRepo = {
